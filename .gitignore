@@ -1,0 +1,47 @@
+# ============================================
+# .gitignore for MCP-Splunk Project
+# ============================================
+
+# Virtual Environment — NEVER upload this to GitHub
+# It's huge (100+ MB) and each person creates their own
+mcp_env/
+
+# Python cache files — auto-generated, not needed
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# Environment variables — contains PASSWORDS and API keys
+# NEVER upload this to GitHub for security reasons
+.env
+
+# VS Code settings — each person has their own
+.vscode/
+
+# OS generated files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Splunk data files — too large for GitHub
+*.csv
+*.tsv
+*.gz
+*.tgz
+
+# Log files
+*.log
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Test output
+test_setup.py
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
