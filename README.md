@@ -1,2 +1,2 @@
 # mcp-splunk-server
-Mini-Project(Semester 4) Repository
+Integration of MCP with Splunk for Enhanced Real-Time Cybersecurity Threat Monitoring
