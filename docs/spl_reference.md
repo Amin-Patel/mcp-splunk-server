@@ -41,3 +41,33 @@ index=_internal
 - `eval` = create calculated field (like pandas apply)
 - `-` before field in sort = descending order
 - `span=1h` in timechart = bucket size of 1 hour
+## Advanced Security Queries (Day 4)
+
+### Multi-Condition Threat Hunting
+index=_internal
+| eval severity=case(
+log_level=="ERROR", "CRITICAL",
+log_level=="WARN", "WARNING",
+true(), "OTHER"
+)
+| stats count by severity, component
+| where severity IN ("CRITICAL", "WARNING")
+| sort - count
+**Key commands:** `eval case()`, `IN()`, multi-field grouping
+
+### Anomaly Detection (Statistical)
+index=_internal
+| stats count as event_count by source
+| eventstats avg(event_count) as avg_events, stdev(event_count) as stdev_events
+| eval threshold=avg_events + (2 * stdev_events)
+| eval is_anomaly=if(event_count > threshold, "ANOMALY", "NORMAL")
+| where is_anomaly="ANOMALY"
+**Key commands:** `eventstats`, `stdev()`, statistical thresholds
+
+### Investigation Timeline
+index=_internal
+| where log_level IN ("ERROR", "WARN")
+| sort _time
+| table _time, log_level, component, message
+| head 20
+**Key commands:** `sort _time` for chronological order, `table` for clean output
