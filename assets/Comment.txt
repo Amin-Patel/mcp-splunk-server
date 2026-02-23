@@ -1,0 +1,1 @@
+Why is there an empty image in the repository? I know it's a work in progress but I was here to review the code, and saw this, no problem remove this folder if your not going to use it. 
