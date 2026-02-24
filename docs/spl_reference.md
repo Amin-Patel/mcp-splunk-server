@@ -71,3 +71,34 @@ index=_internal
 | table _time, log_level, component, message
 | head 20
 **Key commands:** `sort _time` for chronological order, `table` for clean output
+
+## Week 2 — BOTS v3 Real Security Data Queries
+
+### Dataset Info
+- Index: botsv3
+- Total events: 2,083,056
+- Always use: earliest=0 (data is from 2018)
+
+### Exploration Queries
+All sourcetypes
+index=botsv3 earliest=0 | stats count by sourcetype | sort - count
+
+Time range
+index=botsv3 earliest=0 | stats min(_time) as first, max(_time) as last
+
+All hosts
+index=botsv3 earliest=0 | stats count by host | sort - count
+
+### Security Detection Queries
+Windows login failures (brute force)
+index=botsv3 earliest=0 sourcetype=wineventlog EventCode=4625
+| stats count by src_ip, user | sort - count
+
+DNS queries (tunneling detection)
+index=botsv3 earliest=0 sourcetype=stream:dns
+| stats count by query | sort - count
+
+HTTP traffic analysis (web attacks)
+index=botsv3 earliest=0 sourcetype=stream:http
+| stats count by http_method, status, uri_path | sort - count
+
