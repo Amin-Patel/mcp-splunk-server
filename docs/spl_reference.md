@@ -102,3 +102,23 @@ HTTP traffic analysis (web attacks)
 index=botsv3 earliest=0 sourcetype=stream:http
 | stats count by http_method, status, uri_path | sort - count
 
+## Week 2 Day 2 — Attack Detection Results
+
+### Confirmed Attacks in BOTS v3
+| Attack | IP | Evidence | MITRE |
+|--------|-------|----------|-------|
+| XSS Web Attack | 61.75.35.114 | Malicious scripts in HTTP | T1059.007 |
+| Port Scanning | 192.168.8.103 | 35 unique ports scanned | T1046 |
+| Data Exfiltration | 172.16.133.131 | 126 MB sent outbound | T1041 |
+
+### Negative Findings
+| Attack | Result | Notes |
+|--------|--------|-------|
+| Brute Force | Only 3 failed logins | No active attack |
+| DNS Tunneling | Long domains but CDN/cloud | Suspicious AWS domains noted |
+
+### Key Learnings
+- Field names vary: `name{}` for DNS, `Source_Network_Address` for Windows
+- Multi-value fields need `mvexpand` command
+- Not every attack type exists in every dataset
+- Sourcetype matters: `wineventlog:security` not `wineventlog`
