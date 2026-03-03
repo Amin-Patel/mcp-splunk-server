@@ -122,3 +122,17 @@ index=botsv3 earliest=0 sourcetype=stream:http
 - Multi-value fields need `mvexpand` command
 - Not every attack type exists in every dataset
 - Sourcetype matters: `wineventlog:security` not `wineventlog`
+
+
+### Week 2 Day 3 - Alert Fetcher.py created 
+
+### Generated 5 alerts in splunk 
+MCP_Detect_BruteForce with the  urgency status of High
+MCP_Detect_DataExfil with the urgency sttatus of Critical
+MCP_Detect_portScan with urgency status of Medium 
+MCP_Detect_SQLi with urgency status of Critical
+MCP_Detect_XSS with urgency status of High
+
+### Implemented And Tested 
+Implemented the alert fetcher script in python and tested with the alerts created in splunk
+
