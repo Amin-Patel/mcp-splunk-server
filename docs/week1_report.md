@@ -40,9 +40,9 @@ completed successfully.
 
 ### Advanced SPL + Team Review (Day 4) ✅
 - [✔️] 3 advanced security SPL queries practiced
-- [x] Team work reviewed
-- [x] Week 1 report created
-- [x] Week 2 preparation completed
+- [✔️] Team work reviewed
+- [✔️] Week 1 report created
+- [✔️] Week 2 preparation completed
 
 ---
 

@@ -101,7 +101,7 @@ DETECTION_RULES: Dict[str, DetectionRule] = {
         description="Detects SQL Injection attempts in web requests",
         spl_query='''index=botsv3 sourcetype=stream:http
 | search "SELECT" OR "UNION" OR "INSERT" OR "DROP" OR "1=1"
-| stats count by src_ip, uri_path
+| stats count by dest_ip, src_ip, uri_path, 
 | where count > 0
 | sort -count''',
         severity=Severity.CRITICAL,
@@ -118,10 +118,10 @@ DETECTION_RULES: Dict[str, DetectionRule] = {
         rule_id="MCP_Detect_PortScan",
         name="Port Scan Detection",
         description="Detects port scanning activity using IDS alerts",
-        spl_query='''index=botsv3 sourcetype=suricata event_type=alert
-| stats count by src_ip, dest_ip, alert.signature
-| where count > 5
-| sort -count''',
+        spl_query='''index=botsv3
+| stats dc(dest_port) as unique_ports count by src_ip
+| where unique_ports > 20 OR count > 50
+| sort -unique_ports''',
         severity=Severity.MEDIUM,
         category=Category.RECONNAISSANCE,
         mitre_id="T1046",
@@ -138,7 +138,7 @@ DETECTION_RULES: Dict[str, DetectionRule] = {
         description="Detects brute force login attempts",
         spl_query='''index=botsv3 sourcetype=*
 | search "fail*" OR "invalid" OR "denied" OR "authentication"
-| stats count by src_ip
+| stats count by src_ip, user 
 | where count > 10
 | sort -count''',
         severity=Severity.HIGH,
@@ -156,7 +156,7 @@ DETECTION_RULES: Dict[str, DetectionRule] = {
         name="DNS Data Exfiltration",
         description="Detects large DNS traffic that may indicate data exfiltration",
         spl_query='''index=botsv3 sourcetype="stream:dns"
-| stats sum(bytes_in) as total_bytes by src_ip
+| stats sum(bytes_out) as total_bytes by src_ip, dest_ip
 | where total_bytes > 1000000
 | sort -total_bytes''',
         severity=Severity.CRITICAL,
