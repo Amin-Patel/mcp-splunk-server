@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "splunk-mcp": {
+      "command": "C:/MCP_Project/mcp_env/Scripts/python.exe",
+      "args": [
+        "C:/MCP_Project/mcp_server.py"
+      ],
+      "env": {
+        "SPLUNK_HOST": "localhost",
+        "SPLUNK_PORT": "8089",
+        "SPLUNK_USERNAME": "LightDevil",
+        "SPLUNK_PASSWORD": "********Az06",
+        "PYTHONIOENCODING": "utf-8"
+      }
+    }
+  },
+  "preferences": {
+    "coworkWebSearchEnabled": true,
+    "coworkScheduledTasksEnabled": false,
+    "sidebarMode": "chat"
+  }
+}

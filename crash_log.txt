@@ -22,3 +22,27 @@
 4. All modules imported successfully.
 5. FastMCP Initialized.
 6. Entering stdio run loop. Server is ALIVE.
+
+========================================
+1. Server boot sequence started...
+2. UTF-8 forced successfully.
+3. Working directory set to C:\MCP_Project
+4. All modules imported successfully.
+5. FastMCP Initialized.
+6. Entering stdio run loop. Server is ALIVE.
+
+========================================
+1. Server boot sequence started...
+2. UTF-8 forced successfully.
+3. Working directory set to C:\MCP_Project
+4. All modules imported successfully.
+5. FastMCP Initialized.
+6. Entering stdio run loop. Server is ALIVE.
+
+========================================
+1. Server boot sequence started...
+2. UTF-8 forced successfully.
+3. Working directory set to C:\MCP_Project
+4. All modules imported successfully.
+5. FastMCP Initialized.
+6. Entering stdio run loop. Server is ALIVE.
