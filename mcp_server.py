@@ -55,35 +55,77 @@ try:
             return json.dumps({"status": "Error", "message": str(e)})
 
     # ==========================================================
-    # TOOL 2: SPLUNK SEARCH
+    # TOOL 2: SPLUNK SEARCH (Upgraded with Token Optimization)
     # ==========================================================
     @mcp.tool()
     def splunk_search(query: str, earliest_time: str = "0") -> str:
-        """Execute an SPL query against the Splunk SIEM."""
+        """
+        Execute an SPL (Search Processing Language) query against the Splunk SIEM.
+        Use this to hunt for threats, find logs, investigate IPs, or look for anomalies.
+    
+        CRITICAL AI INSTRUCTION: 
+        To save token context, ALWAYS end your query with `| table field1, field2` 
+        or use `| stats` to return ONLY the specific fields needed for the investigation.
+        Do NOT return raw logs.
+    
+        Args:
+            query: The SPL query string (e.g., 'index=botsv3 sourcetype=stream:http | stats count by src_ip').
+            earliest_time: The time modifier. Default is "0" (all time) for the BOTS v3 dataset.
+        """
         try:
             service = connect_to_splunk()
+        
             if not query.strip().startswith("|") and not query.strip().startswith("search"):
                 query = f"search {query}"
-                
-            search_params = {"earliest_time": earliest_time, "latest_time": "now", "search_mode": "normal", "count": 0}
-            job = service.jobs.create(query, **search_params)
             
+            search_params = {
+                "earliest_time": earliest_time,
+                "latest_time": "now",
+                "search_mode": "normal",
+                "count": 0 
+            }
+        
+            job = service.jobs.create(query, **search_params)
+        
             while not job.is_done():
                 time.sleep(0.5)
-                
+            
             result_list = []
             reader = results.JSONResultsReader(job.results(output_mode="json"))
+        
+            # THE BACKEND SHIELD: List of useless Splunk metadata fields to strip out
+            useless_fields = {
+                "host", "index", "linecount", "source", 
+                "sourcetype", "splunk_server", "eventtype", "punct"
+            }
+        
             for item in reader:
                 if isinstance(item, dict):
-                    clean_item = {k: v for k, v in item.items() if not k.startswith('_') or k == '_time'}
-                    result_list.append(clean_item)
+                    clean_item = {}
+                    for k, v in item.items():
+                        # Remove internal fields (starting with _) EXCEPT for _time
+                        if k.startswith('_') and k != '_time':
+                            continue
+                        # Remove useless metadata to save LLM tokens
+                        if k in useless_fields:
+                            continue
+                    
+                        clean_item[k] = v
+                
+                    # Only append if the dictionary isn't empty
+                    if clean_item:
+                        result_list.append(clean_item)
+                
             job.cancel()
-            
+        
             if not result_list:
-                return json.dumps({"status": "Success", "message": "0 results found."})
+                return json.dumps({"status": "Success", "message": "Query completed but returned 0 results."})
+            
+            # Return max 20 rows to prevent LLM memory overflow
             return json.dumps(result_list[:20], indent=2)
+        
         except Exception as e:
-            return json.dumps({"status": "Error", "message": str(e)})
+            return json.dumps({"status": "Error", "message": f"Error executing SPL query: {str(e)}"})
 
     # ==========================================================
     # TOOL 3: SPLUNK GET ALERTS
