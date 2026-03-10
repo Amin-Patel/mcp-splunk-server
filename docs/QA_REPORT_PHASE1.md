@@ -197,6 +197,33 @@ Observations:
 Overall Result: PASS
 
 
+## Token Optimization Test: PASS
+
+During testing, the Splunk MCP server responses were evaluated to ensure they do not exceed LLM token limits when returning search results.
+
+### Optimization Implemented
+
+* Removed large unnecessary fields from results:
+
+  * `_raw`
+  * `_time`
+  * `linecount`
+* Limited returned search results to **20 rows maximum**
+* Ensured responses remain structured JSON for efficient parsing by the MCP client.
+
+### Test Procedure
+
+1. Executed multiple SPL queries through the MCP tool `splunk_search`.
+2. Verified that returned JSON results exclude heavy log payload fields.
+3. Confirmed that result sets are capped at 20 events.
+4. Monitored LLM interaction to ensure no token overflow occurs.
+
+### Result
+
+All tests completed successfully.
+The MCP server now returns **compact, structured results that remain well within token limits**.
+
+**Status:** PASS ✅
 
 ---
 
