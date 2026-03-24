@@ -44,8 +44,8 @@ User → Claude → MCP Client → MCP Server → Splunk
 
 ## 👥 Team
 - Sayyed Abuzar — Team Lead & Core Developer
-- Patel Mohammed Amin — Testing & Documentation Lead | UI/UX Lead
 - Mohammed Yahya — Data & SPL Specialist
+- Patel Mohammed Amin — Testing & Documentation Lead
 
 ## 📄 License
 MIT License
