@@ -36,4 +36,4 @@ Week 3 successfully bridged the Python backend with the Model Context Protocol (
 ---
 
 ## Project Status: PHASE 1 POC IS COMPLETE.
-The architecture is proven. The AI can successfully query the SIEM. We are ready for the Project Review.
+The architecture is proven. The AI can successfully query the SIEM. We are ready for the Project Review. 
