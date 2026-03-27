@@ -1,20 +1,24 @@
 import sys
 import os
 import traceback
+import json
+import time
+
+from fastmcp import FastMCP
+from splunk_config import connect_to_splunk
+import splunklib.results as results
 
 # ==========================================================
-# THE WIRETAP (Crash Logger)
+# CRASH LOGGER
 # ==========================================================
-LOG_FILE = r"C:\MCP_Project\crash_log.txt"
-with open(LOG_FILE, "a", encoding="utf-8") as f:
-    f.write("\n" + "="*40 + "\n")
-    f.write("1. Server boot sequence started...\n")
 
-try:
-    # 1. Force UTF-8 Encoding
-    sys.stdout.reconfigure(encoding='utf-8')
-    sys.stderr.reconfigure(encoding='utf-8')
-    with open(LOG_FILE, "a", encoding="utf-8") as f: f.write("2. UTF-8 forced successfully.\n")
+# Keep logs inside the project directory so running from System32
+# won't write into unexpected system locations.
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+LOG_DIR = os.path.join(SCRIPT_DIR, "MCP_Project")
+LOG_FILE = os.path.join(LOG_DIR, "crash_log.txt")
+os.makedirs(LOG_DIR, exist_ok=True)
+
 
     # 2. Fix Paths
     PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -166,6 +170,124 @@ try:
 
 except Exception as e:
     # IF ANYTHING CRASHES, WRITE IT TO THE DIARY!
+=======
+def log(msg: str) -> None:
+>>>>>>> 97a3f32 (Add Token Optimization Test PASS section to QA report)
     with open(LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(f"\nCRASH DETECTED: {str(e)}\n")
-        f.write(traceback.format_exc() + "\n")
+        f.write(msg + "\n")
+
+log("=" * 40)
+log("Server boot sequence started")
+
+# ==========================================================
+# INITIALIZE MCP
+# ==========================================================
+
+mcp = FastMCP("Splunk-Security-Brain")
+
+
+@mcp.tool
+def splunk_health_check() -> str:
+    """Check Splunk server health."""
+    try:
+        service = connect_to_splunk()
+        info = service.info
+
+        data = {
+            "status": "Healthy & Connected",
+            "server_name": info.get("serverName"),
+            "version": info.get("version"),
+            "os": info.get("os_name"),
+            "indexes": len(service.indexes)
+        }
+
+        return json.dumps(data, indent=2)
+
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+@mcp.tool
+def splunk_search(query: str, earliest_time: str = "0") -> str:
+    """Run an SPL query in Splunk and return up to 20 results as JSON."""
+    try:
+        service = connect_to_splunk()
+
+        if not query.startswith("search") and not query.startswith("|"):
+            query = "search " + query
+
+        job = service.jobs.create(
+            query,
+            earliest_time=earliest_time,
+            latest_time="now",
+            search_mode="normal",
+            count=0
+        )
+
+        while not job.is_done():
+            time.sleep(0.5)
+
+        reader = results.JSONResultsReader(job.results(output_mode="json"))
+
+        data = []
+        for item in reader:
+            if isinstance(item, dict):
+
+                # Remove heavy fields to prevent token overflow
+                item.pop("_raw", None)
+                item.pop("_time", None)
+                item.pop("linecount", None)
+
+                data.append(item)
+
+                # Limit results to 20 rows
+                if len(data) >= 20:
+                    break
+
+        job.cancel()
+
+        return json.dumps(data, indent=2)
+
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+@mcp.tool
+def splunk_get_alerts(severity: str = "ALL") -> str:
+    """Fetch Splunk alerts (saved searches) and filter by severity if provided."""
+    try:
+        service = connect_to_splunk()
+        alerts = []
+
+        for search in service.saved_searches:
+            if search.name.startswith("MCP_") or search.name.startswith("DETECTED:"):
+                alert = {
+                    "name": search.name,
+                    "description": search.content.get("description"),
+                    "query": search["search"]
+                }
+
+                if severity != "ALL":
+                    desc = (alert.get("description") or "").upper()
+                    if severity.upper() not in desc:
+                        continue
+
+                alerts.append(alert)
+
+        return json.dumps(alerts, indent=2)
+
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+if __name__ == "__main__":
+    try:
+        log("Starting MCP server")
+        print("MCP server starting...", file=sys.stderr)
+
+        mcp.run()
+
+    except Exception as e:
+        log("CRASH DETECTED: " + str(e))
+        log(traceback.format_exc())
+        print("MCP crashed:", e, file=sys.stderr)
