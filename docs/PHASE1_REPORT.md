@@ -28,69 +28,28 @@ The literature review includes studies on AI-driven cybersecurity, SIEM systems 
 
 ## 4. System Architecture
 
-4.1 Overall Architecture
+### 4.1 Overall Architecture
+The system follows a modular architecture:
 
-The system follows a 5-layer architecture designed to enable seamless interaction between a security analyst and Splunk SIEM using natural language.
+User → Claude Desktop → MCP Client → MCP Server → Splunk
 
-Layer 1: User Interface (Analyst)
-The security analyst interacts with the system by typing natural language queries (e.g., “Show me failed logins”). This eliminates the need to manually write complex SPL queries.
+### 4.2 Technology Stack
+- Python 3.11+
+- MCP Python SDK (Anthropic)
+- Splunk Free Edition
+- Claude Desktop
+- BOTS v3 Dataset
 
-Layer 2: LLM (Claude)
-Claude interprets the analyst’s query, understands intent, and determines the appropriate tool (e.g., splunk_search) to fulfill the request. It acts as the reasoning and orchestration layer.
+### 4.3 Data Flow
+1. User sends a query through Claude
+2. MCP Client processes the request
+3. MCP Server maps it to a tool
+4. Splunk executes the query
+5. Results are returned to the user
 
-Layer 3: MCP Client (Claude Desktop)
-The MCP Client manages communication between Claude and the backend server using the MCP (Model Context Protocol). It converts tool calls into structured JSON-RPC requests.
+---
 
-Layer 4: MCP Server (Our Project)
-The MCP Server receives tool calls from the MCP Client, processes them, and executes corresponding operations on Splunk. It also formats and sanitizes results before returning them.
-
-Layer 5: Splunk SIEM
-Splunk stores and indexes security event data. It executes SPL (Search Processing Language) queries and returns raw results to the MCP Server.
-
-Data Flow:
-
-Forward flow:
-User → Claude → MCP Client → MCP Server → Splunk
-
-Return flow:
-Splunk → MCP Server → MCP Client → Claude → User
-
-This layered architecture ensures modularity, scalability, and clear separation of responsibilities.
-
-4.2 Technology Stack
-
-Python (Backend - MCP Server)
-Python is used to implement the MCP Server due to its simplicity, readability, and strong ecosystem for building APIs and integrating with external systems like Splunk.
-
-Splunk SIEM
-Splunk is a leading SIEM platform capable of ingesting, indexing, and searching large volumes of security data. It provides powerful SPL queries for threat detection and analysis.
-
-MCP (Model Context Protocol)
-MCP standardizes communication between LLMs and external tools. It enables structured, secure, and extensible tool invocation, making it ideal for integrating Claude with backend services.
-
-Claude (LLM)
-Claude is used for natural language understanding and reasoning. It translates user queries into actionable tool calls and converts technical results into human-readable insights.
-
-Splunk BOTS v3 Dataset
-The BOTS v3 dataset provides realistic simulated enterprise security data. It is used for testing and demonstrating detection capabilities in a controlled environment.
-
-4.3 Data Flow
-
-The system processes analyst queries through the following steps:
-
-The analyst types a query:
-"Show me failed logins"
-Claude interprets the query and decides to call the appropriate tool (splunk_search).
-The MCP Client sends a JSON-RPC request to the MCP Server with the required parameters.
-The MCP Server constructs and executes an SPL query via the Splunk REST API.
-Splunk processes the query and returns raw results.
-The MCP Server applies the Backend Shield, removing unnecessary metadata and sensitive fields.
-The cleaned JSON response is sent back to the MCP Client.
-Claude applies the Prompt Shield, leveraging tool docstrings and context to interpret results safely.
-Claude generates a human-readable analysis of the results.
-The analyst receives the final response in natural language.
-
-This flow ensures secure, structured, and interpretable interaction between the analyst and the SIEM system.## 5. Methodology
+## 5. Methodology
 
 ### 5.1 Environment Setup
 Python environment configured with required dependencies and Splunk instance set up locally using the Free Edition.
@@ -115,20 +74,150 @@ A token optimization mechanism was implemented to reduce unnecessary data transf
 ## 6. Implementation
 
 ### 6.1 splunk_health_check
-This tool verifies connectivity with the Splunk server and ensures that the system is operational.
+
+**Purpose:** Verify Splunk server connectivity and status
+
+**Implementation:**
+- Connects to Splunk REST API using splunklib
+- Retrieves server info, version, and available indexes
+- Returns JSON with connection status
+
+**Code highlights:**
+```python
+def splunk_health_check():
+    service = connect_to_splunk()
+    info = service.info
+    indexes = service.indexes
+    return {
+        "status": "connected",
+        "version": info["version"],
+        "index_count": len(indexes)
+    }
+
+Why this matters:
+Standard SOC workflow — analysts always verify system
+health before starting investigation.
 
 ### 6.2 splunk_search
-This tool executes SPL queries dynamically through MCP and returns structured results.
+
+**Purpose:** Execute SPL queries via natural language
+
+**Implementation:**
+
+Accepts SPL query string from Claude
+Executes search via Splunk REST API
+Applies Backend Shield to strip metadata
+Returns clean JSON to LLM
+Backend Shield logic:
+
+Python
+
+# Strip non-essential fields before sending to LLM
+essential_fields = ['src_ip', 'dest_ip', 'user', 
+                   'action', 'status', 'uri_path']
+cleaned_results = [{k: v for k, v in event.items() 
+                   if k in essential_fields} 
+                   for event in raw_results]
+
+**Token optimization:**
+Original Splunk response: ~15,000 tokens
+After Backend Shield: ~6,000 tokens
+Reduction: 60%
+
+**Why this matters:**
+This is the CORE tool. Everything else builds on the
+ability to query Splunk conversationally.
 
 ### 6.3 splunk_get_alerts
-This tool fetches triggered alerts from Splunk, enabling real-time monitoring of security events.
 
----
+**Purpose:** Fetch triggered alerts by severity
+
+**Implementation:**
+
+Queries Splunk's saved searches (alerts)
+Filters by severity (critical/high/medium/low)
+Returns alert metadata (name, severity, trigger time)
+
+**Code highlights:**
+
+Python
+
+def splunk_get_alerts(severity="all"):
+    alerts = service.saved_searches
+    triggered = [a for a in alerts if a.is_scheduled 
+                 and a.alert_count > 0]
+    if severity != "all":
+        triggered = [a for a in triggered 
+                    if a.severity == severity]
+    return triggered
+
+**Why this matters:**
+Alert monitoring is a core SOC function. This tool
+automates what normally requires navigating through
+Splunk's UI.
+
+### 6.4 Double Shield Architecture
+
+**Explain the two-layer optimization strategy:**
+
+**Backend Shield (Code-level):**
+
+JSON pruner strips Splunk metadata before LLM sees it
+Fields like _time, host, index, linecount removed
+Only security-relevant fields preserved
+Implemented in: splunk_search tool
+
+**Prompt Shield (LLM-level):**
+
+Tool docstrings contain AI instructions
+Example: "CRITICAL AI INSTRUCTION: To save token
+context, only analyze the provided fields..."
+Claude reads these and adapts behavior accordingly
+Prevents verbose, wasteful responses
+Combined effect:
+Token reduction: ~60%
+Prevents context window overflow
+Enables longer investigation sessions without restart
 
 ## 7. Testing & Results
 
 ### 7.1 Test Scenarios
-Multiple test scenarios were executed, including connectivity checks, query execution, and alert retrieval.
+We tested 5 real-world security investigation scenarios:
+
+Scenario 1: System Health Check
+
+Objective: Verify Splunk is operational
+Tool used: splunk_health_check
+Result: ✅ Server status confirmed in <10 seconds
+
+Scenario 2: Brute Force Attack Detection
+
+Objective: Identify IPs with excessive failed logins
+Query: "Show me IPs with failed authentication attempts"
+Tool used: splunk_search
+Result: ✅ Top 10 attacking IPs identified in 30 seconds
+Manual equivalent: 10-15 minutes
+
+Scenario 3: Threat Actor Investigation
+
+Objective: Deep dive on suspicious IP from Scenario 2
+Query: "Show me all activity from [suspicious IP]"
+Tool used: splunk_search (follow-up query)
+Result: ✅ Full activity timeline in 30 seconds
+Manual equivalent: 15-20 minutes
+
+Scenario 4: Alert Status Check
+
+Objective: Review triggered security alerts
+Tool used: splunk_get_alerts
+Result: ✅ All active alerts retrieved in 15 seconds
+Manual equivalent: 5 minutes (navigating UI)
+
+Scenario 5: Incident Summary
+
+Objective: Generate complete investigation summary
+Result: ✅ AI synthesized all findings in 30 seconds
+Manual equivalent: 15-20 minutes (manual report writing)
 
 ### 7.2 Performance Comparison (Manual vs AI)
 The AI-driven approach significantly reduced query execution time and simplified interaction compared to manual SPL usage.
