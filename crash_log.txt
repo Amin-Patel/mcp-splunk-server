@@ -78,3 +78,57 @@
 4. All modules imported successfully.
 5. FastMCP Initialized.
 6. Entering stdio run loop. Server is ALIVE.
+========================================
+Server boot sequence started
+Working directory: C:\MCP_Project
+FastMCP initialized successfully
+Entering MCP stdio run loop — server is ALIVE
+========================================
+Server boot sequence started
+Working directory: C:\MCP_Project
+FastMCP initialized successfully
+Entering MCP stdio run loop — server is ALIVE
+========================================
+Server boot sequence started
+Working directory: C:\MCP_Project
+FastMCP initialized successfully
+Entering MCP stdio run loop — server is ALIVE
+splunk_health_check called successfully
+splunk_get_alerts returned 5 alerts
+splunk_search ERROR: HTTP 400 Bad Request -- b'{"messages":[{"type":"FATAL","text":"Error in \'tstats\' command: Your Splunk license expired or you have exceeded your license limit too many times. Renew your Splunk license by visiting www.splunk.com/store or calling 866.GET.SPLUNK."}]}'
+splunk_search ERROR: HTTP 400 Bad Request -- b'{"messages":[{"type":"FATAL","text":"Error in \'litsearch\' command: Your Splunk license expired or you have exceeded your license limit too many times. Renew your Splunk license by visiting www.splunk.com/store or calling 866.GET.SPLUNK."}]}'
+========================================
+Server boot sequence started
+Working directory: C:\MCP_Project
+FastMCP initialized successfully
+Entering MCP stdio run loop — server is ALIVE
+splunk_health_check ERROR: Failed to connect to Splunk: Login failed.
+splunk_get_alerts ERROR: Failed to connect to Splunk: Login failed.
+splunk_search ERROR: Failed to connect to Splunk: Login failed.
+splunk_search ERROR: Failed to connect to Splunk: Login failed.
+========================================
+Server boot sequence started
+Working directory: C:\MCP_Project
+FastMCP initialized successfully
+Entering MCP stdio run loop — server is ALIVE
+========================================
+Server boot sequence started
+Working directory: C:\MCP_Project
+FastMCP initialized successfully
+Entering MCP stdio run loop — server is ALIVE
+splunk_health_check ERROR: Failed to connect to Splunk Free Edition: Login failed.
+splunk_search ERROR: Failed to connect to Splunk Free Edition: Login failed.
+========================================
+Server boot sequence started
+Working directory: C:\MCP_Project
+FastMCP initialized successfully
+Entering MCP stdio run loop — server is ALIVE
+splunk_health_check ERROR: Failed to connect to Splunk. Auth mode error: Login failed.. Free mode fallback also failed: Login failed.
+splunk_search ERROR: Failed to connect to Splunk. Auth mode error: Login failed.. Free mode fallback also failed: Login failed.
+========================================
+Server boot sequence started
+Working directory: C:\MCP_Project
+FastMCP initialized successfully
+Entering MCP stdio run loop — server is ALIVE
+splunk_health_check called successfully
+splunk_search returned 5 results (capped at 20)
