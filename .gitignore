@@ -2,72 +2,77 @@
 # .gitignore for MCP-Splunk Project
 # ============================================
 
-# Virtual Environment — NEVER upload this to GitHub
-# It's huge (100+ MB) and each person creates their own
+# --------------------------------------------
+# VIRTUAL ENVIRONMENTS — never upload
+# --------------------------------------------
 mcp_env/
+venv/
+env/
+ENV/
 
-# Python cache files — auto-generated, not needed
+# --------------------------------------------
+# PYTHON CACHE — auto-generated
+# --------------------------------------------
 __pycache__/
 *.py[cod]
 *$py.class
 *.pyo
 
-# Environment variables — contains PASSWORDS and API keys
-# NEVER upload this to GitHub for security reasons
+# --------------------------------------------
+# ENVIRONMENT & SECRETS — NEVER upload
+# Contains passwords, API keys, license info
+# --------------------------------------------
 .env
+*.lic
 
-# VS Code settings — each person has their own
+# --------------------------------------------
+# TESTS — contain hardcoded credentials
+# Keep local only
+# --------------------------------------------
+tests/
+
+# --------------------------------------------
+# EDITOR & IDE FILES
+# --------------------------------------------
 .vscode/
+.idea/
 
-# OS generated files
+# --------------------------------------------
+# OS-GENERATED FILES
+# --------------------------------------------
 Thumbs.db
 Desktop.ini
 .DS_Store
 
-# Splunk data files — too large for GitHub
+# --------------------------------------------
+# SPLUNK DATA FILES — too large for GitHub
+# --------------------------------------------
 *.csv
 *.tsv
 *.gz
 *.tgz
 
-# Log files
+# --------------------------------------------
+# LOG & CRASH FILES
+# --------------------------------------------
 *.log
+crash_log.txt
 
-# Distribution / packaging
+# --------------------------------------------
+# DISTRIBUTION / PACKAGING
+# --------------------------------------------
 dist/
 build/
 *.egg-info/
 
-# Test output
-test_setup.py
-
-# Temporary files
+# --------------------------------------------
+# TEMP & BACKUP FILES
+# --------------------------------------------
 *.tmp
 *.bak
 *.swp
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
 
-# Virtual environment
-venv/
-env/
-ENV/
-
-# Environment variables
-.env
-
-# Distribution / packaging
-build/
-dist/
-*.egg-info/
-
-# VS Code
-.vscode/
-
-# Mac
-.DS_Store
-
-# Logs
-*.log
+# --------------------------------------------
+# LEGACY TEST FILES (clean up)
+# --------------------------------------------
+test_setup.py
