@@ -1,27 +1,12 @@
 """
 ============================================================
-TOOL #4: splunk_create_alert
+TOOL 4: splunk_create_alert
 ============================================================
-Project: MCP Server for Splunk
-Author: Sayyed Abuzar (Team Lead)
-Layer: 1 (Core Retrieval/Creation)
-Status: SKELETON v1 — to be enhanced with Amin's research
-
-Purpose: Allow Claude AI to create Splunk alerts (saved 
-         searches with alert conditions) via natural language.
-
-Example usage from Claude:
-    User: "Create an alert that triggers when any IP has 
-           more than 50 failed logins in 10 minutes"
-    
-    Claude calls: splunk_create_alert(
-        alert_name="BruteForce_Detection",
-        spl_query="index=botsv3 fail* | stats count by src_ip | where count > 50",
-        severity="HIGH",
-        cron_schedule="*/10 * * * *"
-    )
-    
-    Returns: Confirmation that alert was created in Splunk
+Project  : MCP Server for Splunk
+Author   : Sayyed Abuzar
+Research : Amin
+Layer    : 1 - Core Retrieval / Creation
+Status   : PRODUCTION v1.0
 ============================================================
 """
 
@@ -29,257 +14,253 @@ import json
 import sys
 import os
 
-# Add parent directory to path so we can import splunk_config
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from splunk_config import connect_to_splunk
+from tools.alert_templates import (
+    get_template,
+    list_template_names,
+    get_templates_summary,
+)
 
-
-# ============================================================
-# ALERT NAMING CONVENTION
-# ============================================================
-# All alerts created by MCP will be prefixed with "MCP_"
-# This makes them easy to:
-#   - Identify in Splunk UI
-#   - Filter via splunk_get_alerts
-#   - Delete in bulk if needed
-# ============================================================
 ALERT_PREFIX = "MCP_"
 
-# Valid severity levels (Splunk uses numbers: 1-6)
 SEVERITY_MAP = {
-    "INFO":      "1",
-    "LOW":       "2",
-    "MEDIUM":    "3",
-    "HIGH":      "4",
-    "CRITICAL":  "5",
-    "FATAL":     "6"
+    "INFO":     "1",
+    "LOW":      "2",
+    "MEDIUM":   "3",
+    "HIGH":     "4",
+    "CRITICAL": "5",
+    "FATAL":    "6",
 }
 
 
 def create_splunk_alert(
-    alert_name: str,
-    spl_query: str,
-    severity: str = "MEDIUM",
-    cron_schedule: str = "*/15 * * * *",
-    description: str = "",
-    threshold: int = 0
-) -> str:
+    alert_name,
+    spl_query,
+    severity="MEDIUM",
+    cron_schedule="*/15 * * * *",
+    description="",
+    threshold=0,
+):
     """
-    Create a new alert (saved search with alert conditions) in Splunk.
-    
+    Create a new Splunk alert using a custom SPL query.
+
     CRITICAL AI INSTRUCTION:
-    - alert_name should be descriptive but short (e.g. "BruteForce_FailedLogins")
-    - spl_query MUST be a valid SPL search
-    - cron_schedule format: minute hour day month weekday
-      (Example: "*/10 * * * *" = every 10 minutes)
-    - severity options: INFO, LOW, MEDIUM, HIGH, CRITICAL, FATAL
-    - The alert triggers when search results count > threshold
-    
-    Args:
-        alert_name: Short descriptive name for the alert
-        spl_query: The SPL search query to monitor
-        severity: One of INFO/LOW/MEDIUM/HIGH/CRITICAL/FATAL
-        cron_schedule: Cron expression for how often to check
-        description: Optional human-readable description
-        threshold: Trigger when result count exceeds this (default 0)
-    
-    Returns:
-        JSON string with creation status and alert details
+    - alert_name: short, no spaces (underscores/hyphens OK)
+    - spl_query: valid SPL query string
+    - severity: INFO / LOW / MEDIUM / HIGH / CRITICAL / FATAL
+    - cron_schedule: standard cron format
+    - threshold: alert fires when result count > this number
+    - For common threats use create_alert_from_template() instead
     """
-    
-    # ----------------------------------------------------------
-    # STEP 1: INPUT VALIDATION
-    # ----------------------------------------------------------
+
+    # STEP 1: VALIDATE
     try:
-        # Validate severity
         severity_upper = severity.upper()
         if severity_upper not in SEVERITY_MAP:
             return json.dumps({
-                "status": "Error",
-                "message": f"Invalid severity '{severity}'. Must be one of: {list(SEVERITY_MAP.keys())}"
+                "status":  "Error",
+                "message": "Invalid severity '{}'. Choose from: {}".format(
+                    severity, list(SEVERITY_MAP.keys())
+                ),
             })
-        
-        # Validate alert_name (only allow letters, numbers, underscores, hyphens)
+
         clean_name = alert_name.replace("_", "").replace("-", "")
         if not alert_name or not clean_name.isalnum():
             return json.dumps({
-                "status": "Error",
-                "message": "alert_name must contain only letters, numbers, underscores, hyphens"
+                "status":  "Error",
+                "message": "alert_name must only contain letters, numbers, underscores, or hyphens",
             })
-        
-        # Add MCP_ prefix if not present
-        if not alert_name.startswith(ALERT_PREFIX):
-            full_alert_name = f"{ALERT_PREFIX}{alert_name}"
-        else:
-            full_alert_name = alert_name
-        
-        # Validate SPL query is not empty
+
+        full_name = (
+            alert_name
+            if alert_name.startswith(ALERT_PREFIX)
+            else "{}{}".format(ALERT_PREFIX, alert_name)
+        )
+
         if not spl_query or not spl_query.strip():
             return json.dumps({
-                "status": "Error",
-                "message": "spl_query cannot be empty"
+                "status":  "Error",
+                "message": "spl_query cannot be empty",
             })
-        
-        # Auto-prefix with 'search' if needed
-        if not spl_query.strip().startswith("|") and not spl_query.strip().lower().startswith("search"):
-            spl_query = f"search {spl_query}"
-        
+
+        q = spl_query.strip()
+        if not q.startswith("|") and not q.lower().startswith("search"):
+            spl_query = "search {}".format(q)
+
     except Exception as e:
-        return json.dumps({
-            "status": "Error",
-            "message": f"Validation failed: {str(e)}"
-        })
-    
-    # ----------------------------------------------------------
-    # STEP 2: CONNECT TO SPLUNK
-    # ----------------------------------------------------------
+        return json.dumps({"status": "Error", "message": "Validation failed: {}".format(str(e))})
+
+    # STEP 2: CONNECT
     try:
         service = connect_to_splunk()
     except Exception as e:
-        return json.dumps({
-            "status": "Error",
-            "message": f"Failed to connect to Splunk: {str(e)}"
-        })
-    
-    # ----------------------------------------------------------
-    # STEP 3: CHECK IF ALERT ALREADY EXISTS
-    # ----------------------------------------------------------
+        return json.dumps({"status": "Error", "message": "Splunk connection failed: {}".format(str(e))})
+
+    # STEP 3: DUPLICATE CHECK
     try:
-        existing_names = [s.name for s in service.saved_searches]
-        if full_alert_name in existing_names:
+        existing = [s.name for s in service.saved_searches]
+        if full_name in existing:
             return json.dumps({
-                "status": "Error",
-                "message": f"Alert '{full_alert_name}' already exists. Use a different name or delete the existing one first."
+                "status":  "Error",
+                "message": "Alert '{}' already exists. Choose a different name or delete it first.".format(full_name),
             })
     except Exception as e:
-        return json.dumps({
-            "status": "Error",
-            "message": f"Failed to check existing alerts: {str(e)}"
-        })
-    
-    # ----------------------------------------------------------
-    # STEP 4: CREATE THE ALERT
-    # ----------------------------------------------------------
-    # This is the CONFIRMED working approach (proven via test_create_alert.py)
-    # Enterprise license supports all these parameters.
-    # ----------------------------------------------------------
+        return json.dumps({"status": "Error", "message": "Duplicate check failed: {}".format(str(e))})
+
+    # STEP 4: CREATE
     try:
         new_alert = service.saved_searches.create(
-            name=full_alert_name,
+            name=full_name,
             search=spl_query,
             **{
-                "is_scheduled": "1",
-                "cron_schedule": cron_schedule,
-                "alert_type": "number of events",
+                "is_scheduled":     "1",
+                "cron_schedule":    cron_schedule,
+                "alert_type":       "number of events",
                 "alert_comparator": "greater than",
-                "alert_threshold": str(threshold),
-                "alert.severity": SEVERITY_MAP[severity_upper],
-                "description": description or f"MCP-created alert: {alert_name}",
-                "actions": "logevent"
-            }
+                "alert_threshold":  str(threshold),
+                "alert.severity":   SEVERITY_MAP[severity_upper],
+                "description":      description or "MCP-created alert: {}".format(alert_name),
+                "actions":          "logevent",
+            },
         )
-        
-        return json.dumps({
-            "status": "Success",
-            "message": f"Alert '{full_alert_name}' created successfully",
-            "alert_details": {
-                "name": new_alert.name,
-                "search": spl_query[:100] + ("..." if len(spl_query) > 100 else ""),
-                "severity": severity_upper,
-                "cron_schedule": cron_schedule,
-                "threshold": threshold,
-                "scheduled": True
-            }
-        }, indent=2)
-        
+
+        return json.dumps(
+            {
+                "status":  "Success",
+                "message": "Alert '{}' created successfully".format(full_name),
+                "alert_details": {
+                    "name":          new_alert.name,
+                    "search_preview": spl_query[:120] + ("..." if len(spl_query) > 120 else ""),
+                    "severity":      severity_upper,
+                    "cron_schedule": cron_schedule,
+                    "threshold":     threshold,
+                    "scheduled":     True,
+                },
+            },
+            indent=2,
+        )
+
     except Exception as e:
+        return json.dumps({"status": "Error", "message": "Alert creation failed: {}".format(str(e))})
+
+
+def create_alert_from_template(template_key, custom_name=""):
+    """
+    Create a Splunk alert from a pre-built security template.
+
+    CRITICAL AI INSTRUCTION:
+    Available template keys:
+      brute_force      - Brute force login detection (HIGH)
+      port_scan        - Port scanning detection (MEDIUM)
+      dns_anomaly      - DNS exfiltration detection (MEDIUM)
+      http_error_spike - HTTP 5xx error spike (LOW)
+      suspicious_login - Multi-country user login (HIGH)
+
+    Call list_alert_templates() first if unsure which to use.
+    """
+    template = get_template(template_key)
+
+    if not template:
         return json.dumps({
-            "status": "Error",
-            "message": f"Failed to create alert: {str(e)}"
+            "status":             "Error",
+            "message":            "Template '{}' not found.".format(template_key),
+            "available_templates": list_template_names(),
         })
 
+    chosen_name = custom_name if custom_name else template["name"]
 
-def delete_splunk_alert(alert_name: str) -> str:
+    return create_splunk_alert(
+        alert_name=chosen_name,
+        spl_query=template["spl_query"],
+        severity=template["severity"],
+        cron_schedule=template["cron_schedule"],
+        description=template["description"],
+        threshold=template["threshold"],
+    )
+
+
+def list_alert_templates():
     """
-    Helper function to delete an alert (useful for testing).
-    
-    Args:
-        alert_name: Name of the alert to delete (with or without MCP_ prefix)
-    
-    Returns:
-        JSON string with deletion status
+    Return all available pre-built alert templates.
+    Call this before create_alert_from_template() to see options.
     """
-    # Add prefix if missing
-    if not alert_name.startswith(ALERT_PREFIX):
-        full_alert_name = f"{ALERT_PREFIX}{alert_name}"
-    else:
-        full_alert_name = alert_name
-    
+    summary = get_templates_summary()
+    return json.dumps(
+        {
+            "status":          "Success",
+            "total_templates": len(summary),
+            "templates":       summary,
+        },
+        indent=2,
+    )
+
+
+def delete_splunk_alert(alert_name):
+    """
+    Delete a Splunk alert by name (cleanup utility).
+    MCP_ prefix is optional - will be added automatically.
+    """
+    full_name = (
+        alert_name
+        if alert_name.startswith(ALERT_PREFIX)
+        else "{}{}".format(ALERT_PREFIX, alert_name)
+    )
+
     try:
         service = connect_to_splunk()
-        
-        if full_alert_name not in [s.name for s in service.saved_searches]:
+        existing = [s.name for s in service.saved_searches]
+
+        if full_name not in existing:
             return json.dumps({
-                "status": "Error",
-                "message": f"Alert '{full_alert_name}' does not exist"
+                "status":  "Error",
+                "message": "Alert '{}' not found in Splunk".format(full_name),
             })
-        
-        service.saved_searches.delete(full_alert_name)
-        
+
+        service.saved_searches.delete(full_name)
+
         return json.dumps({
-            "status": "Success",
-            "message": f"Alert '{full_alert_name}' deleted successfully"
+            "status":  "Success",
+            "message": "Alert '{}' deleted successfully".format(full_name),
         })
-        
+
     except Exception as e:
-        return json.dumps({
-            "status": "Error",
-            "message": f"Failed to delete alert: {str(e)}"
-        })
+        return json.dumps({"status": "Error", "message": "Deletion failed: {}".format(str(e))})
 
 
-# ============================================================
-# STANDALONE TEST (run directly to test without Claude)
-# ============================================================
 if __name__ == "__main__":
-    # Set credentials for standalone testing
-    # (Claude Desktop sets these via env vars normally)
+
     if not os.getenv("SPLUNK_USERNAME"):
-        print("⚠️ Setting test credentials for standalone run...")
-        os.environ["SPLUNK_USERNAME"] = "LightDevil"
-        os.environ["SPLUNK_PASSWORD"] = "********Az06"
-    
+        os.environ["SPLUNK_USERNAME"] = "YOUR_USERNAME_HERE"
+        os.environ["SPLUNK_PASSWORD"] = "YOUR_PASSWORD_HERE"
+
     print("=" * 60)
-    print("TESTING: splunk_create_alert")
+    print("TESTING: splunk_create_alert - Production v1.0")
     print("=" * 60)
-    
-    # Test 1: Create a brute force alert
-    print("\n[Test 1] Creating brute force detection alert...")
-    result = create_splunk_alert(
-        alert_name="SkeletonTest_BruteForce",
-        spl_query='index=botsv3 (fail* OR "invalid password") | stats count by src_ip | where count > 50',
-        severity="HIGH",
-        cron_schedule="*/10 * * * *",
-        description="Skeleton test — brute force detection",
-        threshold=0
-    )
-    print(result)
-    
-    # Test 2: Try to create the same alert again (should fail with "already exists")
-    print("\n[Test 2] Creating duplicate alert (should fail)...")
-    result = create_splunk_alert(
-        alert_name="SkeletonTest_BruteForce",
-        spl_query="index=botsv3 | stats count by src_ip",
-        severity="HIGH"
-    )
-    print(result)
-    
-    # Test 3: Cleanup — delete the test alert
-    print("\n[Test 3] Cleaning up test alert...")
-    result = delete_splunk_alert("SkeletonTest_BruteForce")
-    print(result)
-    
+
+    print("\n[Test 1] Listing all available templates...")
+    print(list_alert_templates())
+
+    print("\n[Test 2] Creating alert from brute_force template...")
+    print(create_alert_from_template("brute_force"))
+
+    print("\n[Test 3] Creating custom alert...")
+    print(create_splunk_alert(
+        alert_name="CustomTest_Demo",
+        spl_query="index=botsv3 | stats count",
+        severity="LOW",
+        cron_schedule="*/30 * * * *",
+        description="Standalone test - custom alert",
+    ))
+
+    print("\n[Test 4] Testing invalid template key (should return error)...")
+    print(create_alert_from_template("this_does_not_exist"))
+
+    print("\n[Test 5] Cleaning up test alerts...")
+    print(delete_splunk_alert("BruteForce_FailedLogins"))
+    print(delete_splunk_alert("CustomTest_Demo"))
+
     print("\n" + "=" * 60)
-    print("TESTING COMPLETE")
+    print("ALL TESTS COMPLETE")
     print("=" * 60)

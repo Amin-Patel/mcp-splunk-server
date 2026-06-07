@@ -9,6 +9,16 @@ from splunk_config import connect_to_splunk
 import splunklib.results as results
 
 # ==========================================================
+# TOOL #4 IMPORTS — Alert creation functions
+# ==========================================================
+from tools.create_alert import (
+    create_splunk_alert,
+    create_alert_from_template,
+    list_alert_templates,
+    delete_splunk_alert,
+)
+
+# ==========================================================
 # PATH FIX — Ensures .env is found regardless of where
 # Claude Desktop launches this script from
 # ==========================================================
@@ -24,14 +34,14 @@ os.chdir(PROJECT_DIR)
 LOG_FILE = os.path.join(PROJECT_DIR, "crash_log.txt")
 
 
-def log(msg: str) -> None:
+def log(msg):
     with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(msg + "\n")
 
 
 log("=" * 40)
 log("Server boot sequence started")
-log(f"Working directory: {PROJECT_DIR}")
+log("Working directory: {}".format(PROJECT_DIR))
 
 # ==========================================================
 # INITIALIZE MCP SERVER
@@ -45,7 +55,7 @@ log("FastMCP initialized successfully")
 # ==========================================================
 
 @mcp.tool()
-def splunk_health_check() -> str:
+def splunk_health_check():
     """
     Check the health, version, and status of the Splunk SIEM server.
     Use this at the start of every investigation session to confirm
@@ -67,7 +77,7 @@ def splunk_health_check() -> str:
         return json.dumps(health_data, indent=2)
 
     except Exception as e:
-        log(f"splunk_health_check ERROR: {str(e)}")
+        log("splunk_health_check ERROR: {}".format(str(e)))
         return json.dumps({"status": "Error", "message": str(e)})
 
 
@@ -76,7 +86,7 @@ def splunk_health_check() -> str:
 # ==========================================================
 
 @mcp.tool()
-def splunk_search(query: str, earliest_time: str = "0") -> str:
+def splunk_search(query, earliest_time="0"):
     """
     Execute an SPL (Search Processing Language) query against the Splunk SIEM.
     Use this to hunt for threats, find logs, investigate IPs, or detect anomalies.
@@ -94,9 +104,8 @@ def splunk_search(query: str, earliest_time: str = "0") -> str:
     try:
         service = connect_to_splunk()
 
-        # Auto-prefix with 'search' if needed
         if not query.strip().startswith("|") and not query.strip().lower().startswith("search"):
-            query = f"search {query}"
+            query = "search {}".format(query)
 
         search_params = {
             "earliest_time": earliest_time,
@@ -107,11 +116,9 @@ def splunk_search(query: str, earliest_time: str = "0") -> str:
 
         job = service.jobs.create(query, **search_params)
 
-        # Wait for job to complete
         while not job.is_done():
             time.sleep(0.5)
 
-        # THE BACKEND SHIELD — Strip useless metadata fields
         useless_fields = {
             "host", "index", "linecount", "source",
             "sourcetype", "splunk_server", "eventtype", "punct"
@@ -124,10 +131,8 @@ def splunk_search(query: str, earliest_time: str = "0") -> str:
             if isinstance(item, dict):
                 clean_item = {}
                 for k, v in item.items():
-                    # Remove internal fields (starting with _) EXCEPT _time
                     if k.startswith("_") and k != "_time":
                         continue
-                    # Remove useless metadata
                     if k in useless_fields:
                         continue
                     clean_item[k] = v
@@ -143,13 +148,12 @@ def splunk_search(query: str, earliest_time: str = "0") -> str:
                 "message": "Query completed but returned 0 results. Try adjusting the time range or query."
             })
 
-        # Limit to 20 rows to prevent LLM token overflow
-        log(f"splunk_search returned {len(result_list)} results (capped at 20)")
+        log("splunk_search returned {} results (capped at 20)".format(len(result_list)))
         return json.dumps(result_list[:20], indent=2)
 
     except Exception as e:
-        log(f"splunk_search ERROR: {str(e)}")
-        return json.dumps({"status": "Error", "message": f"SPL query error: {str(e)}"})
+        log("splunk_search ERROR: {}".format(str(e)))
+        return json.dumps({"status": "Error", "message": "SPL query error: {}".format(str(e))})
 
 
 # ==========================================================
@@ -157,7 +161,7 @@ def splunk_search(query: str, earliest_time: str = "0") -> str:
 # ==========================================================
 
 @mcp.tool()
-def splunk_get_alerts(severity: str = "ALL") -> str:
+def splunk_get_alerts(severity="ALL"):
     """
     Fetch triggered security alerts and saved searches from Splunk.
     Filter by severity level if needed.
@@ -187,18 +191,134 @@ def splunk_get_alerts(severity: str = "ALL") -> str:
                 alerts_found.append(alert_data)
 
         if not alerts_found:
-            log(f"splunk_get_alerts: No alerts found for severity={severity}")
+            log("splunk_get_alerts: No alerts found for severity={}".format(severity))
             return json.dumps({
                 "status": "Success",
-                "message": f"No alerts found matching severity: {severity}"
+                "message": "No alerts found matching severity: {}".format(severity)
             })
 
-        log(f"splunk_get_alerts returned {len(alerts_found)} alerts")
+        log("splunk_get_alerts returned {} alerts".format(len(alerts_found)))
         return json.dumps(alerts_found, indent=2)
 
     except Exception as e:
-        log(f"splunk_get_alerts ERROR: {str(e)}")
+        log("splunk_get_alerts ERROR: {}".format(str(e)))
         return json.dumps({"status": "Error", "message": str(e)})
+
+
+# ==========================================================
+# TOOL 4A: CREATE ALERT (Custom SPL)
+# ==========================================================
+
+@mcp.tool()
+def splunk_create_alert(
+    alert_name,
+    spl_query,
+    severity="MEDIUM",
+    cron_schedule="*/15 * * * *",
+    description="",
+    threshold=0,
+):
+    """
+    Create a new Splunk alert using a custom SPL query.
+    The alert will run on a schedule and trigger when results exceed the threshold.
+    All MCP-created alerts are prefixed with MCP_ for easy identification.
+
+    CRITICAL AI INSTRUCTION:
+    - alert_name: short descriptive name, no spaces (use underscores)
+    - spl_query: must be a valid SPL search query
+    - severity: INFO / LOW / MEDIUM / HIGH / CRITICAL / FATAL
+    - cron_schedule: cron format (*/10 * * * * = every 10 minutes)
+    - threshold: alert fires when result count is greater than this (default 0)
+    - For common security detections, use splunk_create_alert_from_template instead
+
+    Args:
+        alert_name: Short name like BruteForce_Detection
+        spl_query: SPL query to monitor
+        severity: Alert severity level
+        cron_schedule: How often to run the search
+        description: Human-readable description
+        threshold: Trigger when results exceed this count
+    """
+    log("splunk_create_alert called: {}".format(alert_name))
+    result = create_splunk_alert(
+        alert_name=alert_name,
+        spl_query=spl_query,
+        severity=severity,
+        cron_schedule=cron_schedule,
+        description=description,
+        threshold=threshold,
+    )
+    return result
+
+
+# ==========================================================
+# TOOL 4B: CREATE ALERT FROM TEMPLATE
+# ==========================================================
+
+@mcp.tool()
+def splunk_create_alert_from_template(template_key, custom_name=""):
+    """
+    Create a Splunk alert from a pre-built security detection template.
+    Templates include optimized SPL queries, severity levels, and schedules.
+
+    CRITICAL AI INSTRUCTION:
+    Available template keys (use these exact strings):
+      brute_force      - Detects 50+ failed logins from same IP (HIGH)
+      port_scan        - Detects IP scanning 20+ ports (MEDIUM)
+      dns_anomaly      - Detects DNS tunneling/exfiltration (MEDIUM)
+      http_error_spike - Detects 100+ HTTP 5xx errors (LOW)
+      suspicious_login - Detects multi-country user logins (HIGH)
+
+    Call splunk_list_alert_templates first to see all available templates.
+
+    Args:
+        template_key: Key of the template to deploy (e.g. brute_force)
+        custom_name: Optional custom name to override the template default
+    """
+    log("splunk_create_alert_from_template called: {}".format(template_key))
+    result = create_alert_from_template(
+        template_key=template_key,
+        custom_name=custom_name,
+    )
+    return result
+
+
+# ==========================================================
+# TOOL 4C: LIST ALERT TEMPLATES
+# ==========================================================
+
+@mcp.tool()
+def splunk_list_alert_templates():
+    """
+    List all available pre-built security alert templates.
+    Call this BEFORE creating an alert from a template so you
+    can see what options are available.
+
+    Returns template keys, names, categories, severity levels,
+    and MITRE ATT&CK technique mappings.
+    """
+    log("splunk_list_alert_templates called")
+    result = list_alert_templates()
+    return result
+
+
+# ==========================================================
+# TOOL 4D: DELETE ALERT
+# ==========================================================
+
+@mcp.tool()
+def splunk_delete_alert(alert_name):
+    """
+    Delete an MCP-created alert from Splunk.
+    Useful for cleanup after testing or removing outdated alerts.
+    The MCP_ prefix is added automatically if not provided.
+
+    Args:
+        alert_name: Name of the alert to delete (MCP_ prefix optional)
+    """
+    log("splunk_delete_alert called: {}".format(alert_name))
+    result = delete_splunk_alert(alert_name=alert_name)
+    return result
 
 
 # ==========================================================
@@ -207,11 +327,11 @@ def splunk_get_alerts(severity: str = "ALL") -> str:
 
 if __name__ == "__main__":
     try:
-        log("Entering MCP stdio run loop — server is ALIVE")
+        log("Entering MCP stdio run loop - server is ALIVE")
         print("MCP server starting...", file=sys.stderr)
         mcp.run(transport="stdio")
 
     except Exception as e:
-        log(f"CRASH DETECTED: {str(e)}")
+        log("CRASH DETECTED: {}".format(str(e)))
         log(traceback.format_exc())
-        print(f"MCP crashed: {e}", file=sys.stderr)
+        print("MCP crashed: {}".format(e), file=sys.stderr)

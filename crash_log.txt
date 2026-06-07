@@ -132,3 +132,30 @@ FastMCP initialized successfully
 Entering MCP stdio run loop — server is ALIVE
 splunk_health_check called successfully
 splunk_search returned 5 results (capped at 20)
+========================================
+Server boot sequence started
+Working directory: C:\MCP_Project
+FastMCP initialized successfully
+Entering MCP stdio run loop — server is ALIVE
+splunk_health_check ERROR: Failed to connect to Splunk. Auth mode error: Login failed.. Free mode fallback also failed: Login failed.
+splunk_search ERROR: Failed to connect to Splunk. Auth mode error: Login failed.. Free mode fallback also failed: Login failed.
+========================================
+Server boot sequence started
+Working directory: C:\MCP_Project
+FastMCP initialized successfully
+Entering MCP stdio run loop — server is ALIVE
+splunk_health_check called successfully
+splunk_search returned 5 results (capped at 20)
+========================================
+Server boot sequence started
+Working directory: C:\MCP_Project
+FastMCP initialized successfully
+========================================
+Server boot sequence started
+Working directory: C:\MCP_Project
+FastMCP initialized successfully
+Entering MCP stdio run loop - server is ALIVE
+splunk_list_alert_templates called
+splunk_create_alert_from_template called: brute_force
+splunk_get_alerts returned 7 alerts
+splunk_delete_alert called: MCP_BruteForce_FailedLogins
